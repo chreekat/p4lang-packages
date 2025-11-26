@@ -19,7 +19,8 @@ RUN apt-get update -y && apt-get install -y \
     libssl-dev \
     make \
     equivs \
-    devscripts
+    devscripts \
+    cmake
 
 WORKDIR /p4lang-packages
 
