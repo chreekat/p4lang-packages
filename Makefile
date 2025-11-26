@@ -22,6 +22,7 @@ pi:
 p4c-install-deps: p4c
 	cd p4c && \
 	git checkout v1.2.4.8 && \
+	mk-build-deps -t "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y" -i -r && \
 	mkdir -p fetch_content build && cd fetch_content && \
 	cmake .. \
 		-DCMAKE_BUILD_TYPE=RELEASE \
@@ -46,8 +47,7 @@ p4c-install-deps: p4c
 		fi; \
 	done && \
 	cp -r fetch_content/_deps build/ && \
-	rm -rf fetch_content && \
-	mk-build-deps -t "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y" -i -r
+	rm -rf fetch_content
 
 bmv2-install-deps: bmv2
 	cd bmv2 && \
