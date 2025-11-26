@@ -18,7 +18,7 @@ upstreampck := $(source)_$(version).orig.tar.gz
 clean:
 	@ echo CLEAN
 	rm -f ../$(upstreampck)
-	tar czf ../$(upstreampck) --exclude=debian --exclude=.pc .
+	tar czf ../$(upstreampck) --exclude=./debian --exclude=.pc .
 	dh_testdir
 	dh_auto_clean
 	dh_clean
