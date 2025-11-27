@@ -19,7 +19,10 @@ pi:
 # Install build dependencies
 ############################
 
-p4c-install-deps: p4c
+apt-update:
+	apt-get update
+
+p4c-install-deps: p4c apt-update
 	cd p4c && \
 	git checkout v1.2.4.8 && \
 	mk-build-deps -t "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y" -i -r && \
@@ -49,12 +52,12 @@ p4c-install-deps: p4c
 	cp -r fetch_content/_deps build/ && \
 	rm -rf fetch_content
 
-bmv2-install-deps: bmv2
+bmv2-install-deps: bmv2 apt-update
 	cd bmv2 && \
 	git checkout 5f1c590c7bdb32ababb6d6fe18977cf13ae3b043 && \
 	mk-build-deps -t "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y" -i -r
 
-pi-install-deps: pi
+pi-install-deps: pi apt-update
 	cd pi && \
 	git checkout 24e0a3c08c964e36d235973556b90e0ae922b894 && \
 	mk-build-deps -t "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y" -i -r
@@ -97,4 +100,4 @@ clean:
 	if [ -d "bmv2" ]; then cd bmv2 && git clean -dfx; fi
 	if [ -d "pi" ]; then cd pi && git clean -dfx; fi
 
-.PHONY: p4c-install-deps bmv2-install-deps pi-install-deps p4c-deb p4c-sdeb bv2-deb bv2-sdeb pi-deb pi-sdeb clean
+.PHONY: apt-update p4c-install-deps bmv2-install-deps pi-install-deps p4c-deb p4c-sdeb bv2-deb bv2-sdeb pi-deb pi-sdeb clean
