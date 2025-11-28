@@ -1,7 +1,9 @@
 all: pi-sdeb bmv2-sdeb p4c-sdeb
 
+p4c_version := v1.2.5.9
+
 p4c:
-	git clone --recurse-submodules -b main https://github.com/p4lang/p4c p4c
+	git clone --depth 1 -b $(p4c_version) https://github.com/p4lang/p4c p4c
 	rm -rf p4c/debian
 	cp -r p4lang-p4c p4c/debian
 
@@ -24,11 +26,10 @@ apt-update:
 
 p4c-install-deps: p4c apt-update
 	cd p4c && \
-	git checkout v1.2.4.8 && \
 	mk-build-deps -t "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y" -i -r && \
 	mkdir -p fetch_content build && cd fetch_content && \
 	cmake .. \
-		-DCMAKE_BUILD_TYPE=RELEASE \
+		-DCMAKE_BUILD_TYPE=Release \
 		-DCMAKE_INSTALL_PREFIX=/usr \
 		-DENABLE_BMV2=ON \
 		-DENABLE_EBPF=ON \
@@ -54,12 +55,12 @@ p4c-install-deps: p4c apt-update
 
 bmv2-install-deps: bmv2 apt-update
 	cd bmv2 && \
-	git checkout 5f1c590c7bdb32ababb6d6fe18977cf13ae3b043 && \
+	git checkout 68f4a978f465fd76e98fcdecb762981843fb7310 && \
 	mk-build-deps -t "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y" -i -r
 
 pi-install-deps: pi apt-update
 	cd pi && \
-	git checkout 24e0a3c08c964e36d235973556b90e0ae922b894 && \
+	git checkout 5689c91a8a7423781267b27d8b166c49a53904ff && \
 	mk-build-deps -t "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y" -i -r
 
 #######################
