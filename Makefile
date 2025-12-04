@@ -96,7 +96,7 @@ pi-sdeb: pi-install-deps
 	debuild --no-tgz-check -uc -us -sa
 
 clean:
-	rm -rf p4c bmv2 pi
+	rm -f *.deb *.changes *.dsc *.buildinfo *.tar.*
 	if [ -d "p4c" ]; then cd p4c && git clean -dfx; fi
 	if [ -d "bmv2" ]; then cd bmv2 && git clean -dfx; fi
 	if [ -d "pi" ]; then cd pi && git clean -dfx; fi
