@@ -1,3 +1,9 @@
+p4lang-pi (0.1.0-17) jammy; urgency=medium
+
+  * Package for PPA
+
+ -- Bryan Richter <b@chreekat.net>  Fri, 13 Mar 2026 08:48:09 +0200
+
 p4lang-pi (0.1.0-16) bullseye; urgency=medium
 
   * Update to upstream commit 24e0a3c08c964e36d235973556b90e0ae922b894

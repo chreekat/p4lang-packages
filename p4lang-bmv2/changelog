@@ -1,3 +1,10 @@
+p4lang-bmv2 (1.15.0-9) jammy; urgency=medium
+
+  * Changed distro to 'unstable' for dput
+  * Update release to upstream commit 68f4a978f465fd76e98fcdecb762981843fb7310
+
+ -- Bryan Richter <b@chreekat.net>  Tue, 10 Mar 2026 16:09:47 +0200
+
 p4lang-bmv2 (1.15.0-8) bullseye; urgency=medium
 
   * Update release to upstream commit 5f1c590c7bdb32ababb6d6fe18977cf13ae3b043
