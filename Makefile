@@ -85,15 +85,41 @@ pi-deb: pi-install-deps
 
 p4c-sdeb: p4c-install-deps
 	cd p4c && \
-	debuild --no-tgz-check -uc -us -sa
+	debuild -uc -us -sa
 
 bmv2-sdeb: bmv2-install-deps
 	cd bmv2 && \
-	debuild --no-tgz-check -uc -us -sa
+	git checkout . && \
+	git clean -dfx && \
+	tar czf ../p4lang-bmv2_1.15.0.orig.tar.gz --exclude=debian --exclude=.pc . && \
+	debuild -S -uc -us -sa
+
+.PHONY: bmv2-repack
+bmv2-repack:
+	git -C bmv2 checkout .
+	git -C bmv2 clean -dfx
+	tar Cczf bmv2 p4lang-bmv2_1.15.0.orig.tar.gz --exclude=debian --exclude=.pc .
+	rsync -a --delete p4lang-bmv2/ bmv2/debian/
+	cd bmv2 && debuild -S -uc -us -sa
+
+.PHONY: pi-repack
+pi-repack:
+	git -C pi checkout .
+	git -C pi clean -dfx
+	tar Cczf pi p4lang-pi_0.1.0.orig.tar.gz --exclude=debian --exclude=.pc .
+	rsync -a --delete p4lang-pi/ pi/debian/
+	cd pi && debuild -S -uc -us -sa
+
+# Don't reinstall deps and don't clean (debuild -nc). *Do* refresh debian files.
+bmv2-sdeb-quick:
+	rsync -a --delete p4lang-bmv2/ bmv2/debian/
+	cd bmv2 && \
+	tar czf ../p4lang-bmv2_1.15.0.orig.tar.gz --exclude=debian --exclude=.pc . && \
+	debuild -S -uc -us -sa
 
 pi-sdeb: pi-install-deps
 	cd pi && \
-	debuild --no-tgz-check -uc -us -sa
+	debuild -uc -us -sa
 
 clean:
 	rm -f *.deb *.changes *.dsc *.buildinfo *.tar.*
@@ -101,4 +127,4 @@ clean:
 	if [ -d "bmv2" ]; then cd bmv2 && git clean -dfx; fi
 	if [ -d "pi" ]; then cd pi && git clean -dfx; fi
 
-.PHONY: apt-update p4c-install-deps bmv2-install-deps pi-install-deps p4c-deb p4c-sdeb bv2-deb bv2-sdeb pi-deb pi-sdeb clean
+.PHONY: apt-update p4c-install-deps bmv2-install-deps pi-install-deps p4c-deb p4c-sdeb bmv2-deb bmv2-sdeb bmv2-sdeb-quick pi-deb pi-sdeb clean
