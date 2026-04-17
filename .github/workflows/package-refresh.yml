@@ -1,0 +1,26 @@
+name: Package Refresh
+
+on:
+  schedule:
+    # Quarterly
+    - cron: "0 0 1 feb,may,aug,nov *"
+  workflow_dispatch:
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger OBS rebuilds
+        env:
+          OBS_REBUILD_TOKENS: ${{ secrets.OBS_REBUILD_TOKENS }}
+        run: |
+          while IFS= read -r token; do
+            [ -z "$token" ] && continue
+            echo "::add-mask::$token"
+            curl --silent --show-error --fail \
+              -H "Authorization: Token $token" \
+              -X POST \
+              https://build.opensuse.org/trigger/rebuild \
+              -o /dev/null
+            echo "Triggered rebuild successfully"
+          done <<< "$OBS_REBUILD_TOKENS"
