@@ -5,8 +5,8 @@
 #
 # Usage: build-package [--dry-run] <srcdir> [repo] [arch]
 #   <srcdir>   dir containing the .dsc to build (e.g. build/p4c)
-#   [repo]     OBS repo target, default Raspbian_11
-#   [arch]     build arch, default aarch64
+#   [repo]     OBS repo target, default xUbuntu_22.04
+#   [arch]     build arch, default x86_64
 #
 # A foreign arch (!= host) builds in a chroot under user-mode qemu, which needs
 # the host to register that arch with binfmt's F (fix-binary) flag + a static
@@ -28,8 +28,8 @@ dry_run=0
 [[ "${1:-}" == "--dry-run" ]] && { dry_run=1; shift; }
 
 srcdir="${1:?Usage: build-package [--dry-run] <srcdir> [repo] [arch]}"
-repo="${2:-Raspbian_11}"
-arch="${3:-aarch64}"
+repo="${2:-xUbuntu_22.04}"
+arch="${3:-x86_64}"
 
 [[ -d "$srcdir" ]] || die "no such dir: $srcdir"
 srcdir_abs="$(cd "$srcdir" && pwd)"
