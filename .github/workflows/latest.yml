@@ -1,0 +1,55 @@
+name: Latest Channel
+
+on:
+  repository_dispatch:
+    types: [upstream-tag]
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package to build (pi, bmv2, p4c)'
+        required: true
+      tag:
+        description: 'Upstream tag to build (e.g. v0.1.3 or 1.15.4)'
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Take (package, tag) from the dispatch payload or the manual inputs.
+      # Passed through env, never interpolated into the shell, to avoid
+      # injection from a repository_dispatch payload.
+      - name: Resolve package and tag
+        id: input
+        env:
+          EVENT: ${{ github.event_name }}
+          DISPATCH_PACKAGE: ${{ github.event.client_payload.package }}
+          DISPATCH_TAG: ${{ github.event.client_payload.tag }}
+          INPUT_PACKAGE: ${{ github.event.inputs.package }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          if [ "$EVENT" = "repository_dispatch" ]; then
+            echo "package=$DISPATCH_PACKAGE" >> "$GITHUB_OUTPUT"
+            echo "tag=$DISPATCH_TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "package=$INPUT_PACKAGE" >> "$GITHUB_OUTPUT"
+            echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y osc devscripts debhelper git
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Build and upload ${{ steps.input.outputs.package }} @ ${{ steps.input.outputs.tag }}
+        env:
+          OBS_USERNAME: ${{ secrets.OBS_USERNAME }}
+          OBS_PASSWORD: ${{ secrets.OBS_PASSWORD }}
+          PACKAGE: ${{ steps.input.outputs.package }}
+          TAG: ${{ steps.input.outputs.tag }}
+        run: just latest "$PACKAGE" "$TAG"
