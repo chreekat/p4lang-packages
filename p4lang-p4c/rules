@@ -16,11 +16,8 @@ upstreampck := $(source)_$(version).orig.tar.gz
 	dh $@ --with python3
 
 clean:
-	@ echo CLEAN
-	rm -f ../$(upstreampck)
-	tar czf ../$(upstreampck) --exclude=./debian --exclude=.pc .
 	dh_testdir
-	dh_auto_clean
+	dh_auto_clean || true
 	dh_clean
 
 override_dh_auto_configure:
