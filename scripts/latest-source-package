@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+#
+# Build a Debian source package for a package at a given upstream tag.
+#
+# Usage: latest-source-package <package> <tag>
+#
+# Supported packages: pi, bmv2, p4c, ptf
+# <tag> is the upstream git tag to build (e.g. v0.1.3 or 1.15.4).
+#
+# Outputs .dsc, .orig.tar.gz, .debian.tar.* to build/<package>/.
+
+set -euo pipefail
+
+die() { echo "error: $*" >&2; exit 1; }
+
+declare -A upstream_repo=(
+    [pi]="https://github.com/p4lang/PI"
+    [bmv2]="https://github.com/p4lang/behavioral-model"
+    [p4c]="https://github.com/p4lang/p4c"
+    [ptf]="https://github.com/p4lang/ptf"
+)
+declare -A debian_dir=(
+    [pi]="p4lang-pi"
+    [bmv2]="p4lang-bmv2"
+    [p4c]="p4lang-p4c"
+    [ptf]="p4lang-ptf"
+)
+declare -A source_name=(
+    [pi]="p4lang-pi"
+    [bmv2]="p4lang-bmv2"
+    [p4c]="p4lang-p4c"
+    [ptf]="p4lang-ptf"
+)
+
+pkg="${1:?Usage: latest-source-package <package> <tag>}"
+tag="${2:?Usage: latest-source-package <package> <tag>}"
+[[ -v upstream_repo[$pkg] ]] || die "unknown package: $pkg"
+
+repo_url="${upstream_repo[$pkg]}"
+deb_dir="${debian_dir[$pkg]}"
+src_name="${source_name[$pkg]}"
+
+[[ -d "$deb_dir" ]] || die "cannot find $deb_dir/ . Run from the repo root."
+
+# The Debian upstream version is the tag with any leading "v" stripped
+# (pi/p4c/ptf tag like v0.1.3; bmv2 tags bare like 1.15.4).
+upstream_version="${tag#v}"
+echo "Building $pkg from tag $tag  ->  upstream version: $upstream_version"
+
+# -- Clone that tag --
+workdir=$(mktemp -d)
+trap 'rm -rf "$workdir"' EXIT
+
+echo "Cloning $repo_url @ $tag into $workdir/$pkg..."
+git clone --recurse-submodules --depth 1 -b "$tag" "$repo_url" "$workdir/$pkg"
+
+# -- Drop in our debian/ --
+rm -rf "$workdir/$pkg/debian"
+cp -a "$deb_dir" "$workdir/$pkg/debian"
+
+# -- Update changelog --
+deb_version="${upstream_version}-1"
+(
+    cd "$workdir/$pkg"
+    DEBEMAIL="${DEBEMAIL:-$(dpkg-parsechangelog -S Maintainer)}" \
+        dch --newversion "$deb_version" \
+            --distribution unstable \
+            "Latest channel build from upstream tag ${tag}"
+)
+
+# -- Orig tarball --
+orig_tarball="${src_name}_${upstream_version}.orig.tar.gz"
+tar -C "$workdir/$pkg" -czf "$workdir/$orig_tarball" \
+    --exclude=debian --exclude=.pc --exclude=.git .
+
+# -- Source package --
+(
+    cd "$workdir/$pkg"
+    dpkg-source -b .
+)
+
+# -- Copy outputs --
+outdir="build/$pkg"
+mkdir -p "$outdir"
+rm -f "$outdir"/*
+
+echo "Copying output files to $outdir/..."
+cp "$workdir"/*.dsc "$workdir"/*.orig.tar.gz "$workdir"/*.debian.tar.* "$outdir/"
+
+echo "Done. Source package for ${src_name} ${deb_version} is in $outdir/."
