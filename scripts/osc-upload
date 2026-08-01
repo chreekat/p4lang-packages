@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+#
+# Upload source package files to an OBS project/package.
+#
+# Usage: osc-upload <project> <package> <files...>
+#
+# Example:
+#   osc-upload home:p4lang:latest p4lang-pi *.dsc *.orig.tar.gz *.debian.tar.xz
+#
+# Credentials:
+#   - If OBS_USERNAME and OBS_PASSWORD are set, they are written to a temp
+#     oscrc (auto-deleted on exit) and used for this run only.
+#   - Otherwise, osc falls back to its normal config (~/.oscrc) and will
+#     prompt interactively if creds are missing.
+
+set -euo pipefail
+
+die() { echo "error: $*" >&2; exit 1; }
+
+project="${1:?Usage: osc-upload <project> <package> <files...>}"
+package="${2:?Usage: osc-upload <project> <package> <files...>}"
+shift 2
+[[ $# -gt 0 ]] || die "no files specified"
+
+workdir=$(mktemp -d)
+oscrc=""
+cleanup() {
+    rm -rf "$workdir"
+    if [[ -n "$oscrc" ]]; then
+        rm -f "$oscrc"
+    fi
+}
+trap cleanup EXIT
+
+if [[ -n "${OBS_USERNAME:-}" && -n "${OBS_PASSWORD:-}" ]]; then
+    oscrc=$(mktemp)
+    chmod 600 "$oscrc"
+    cat > "$oscrc" <<EOF
+[general]
+apiurl = https://api.opensuse.org
+
+[https://api.opensuse.org]
+user = ${OBS_USERNAME}
+pass = ${OBS_PASSWORD}
+EOF
+    osc() { command osc --config "$oscrc" "$@"; }
+else
+    echo "OBS_USERNAME/OBS_PASSWORD not set; using osc's default config (~/.oscrc)."
+    osc() { command osc "$@"; }
+fi
+
+# -- Check out the package --
+echo "Checking out ${project}/${package}..."
+(cd "$workdir" && osc checkout "$project" "$package")
+
+pkg_dir="$workdir/$project/$package"
+[[ -d "$pkg_dir" ]] || die "checkout failed: $pkg_dir does not exist"
+
+# -- Replace source files --
+# Remove old source files (keep _meta and other OBS internals).
+find "$pkg_dir" -maxdepth 1 -type f \
+    ! -name '_*' \
+    -delete
+
+echo "Copying new source files..."
+for f in "$@"; do
+    [[ -f "$f" ]] || die "file not found: $f"
+    cp "$f" "$pkg_dir/"
+done
+
+# -- Add new files and commit --
+(
+    cd "$pkg_dir"
+    osc addremove
+    osc commit -m "Update from latest-source-package"
+)
+
+echo "Done. Uploaded to ${project}/${package}."
