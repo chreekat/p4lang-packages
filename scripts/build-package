@@ -120,7 +120,15 @@ fi
 if [[ "$arch" == "$(uname -m)" ]]; then vm_type="${LOCALBUILD_VM_TYPE:-kvm}"
 else vm_type="${LOCALBUILD_VM_TYPE:-chroot}"; fi
 vm_args=(--vm-type "$vm_type")
-case "$vm_type" in kvm|qemu) vm_args+=(--vm-memory 20000 --vm-disk-size 16384) ;; esac
+# Linking p4c takes a lot of space.
+case "$vm_type" in kvm|qemu)
+    vm_args+=(--vm-memory 20000 --vm-disk-size 40960) ;;
+esac
+
+# p4c's large translation units (e.g. frontend.cpp) under LTO can each need
+# several GB. At the host's full core count they exhaust the VM's RAM and the
+# OOM killer takes cc1plus.
+jobs_args=(--jobs "${LOCALBUILD_JOBS:-8}")
 
 # Keep KVM (disk image) and chroot (directory tree) build roots in separate dirs
 # so switching tiers doesn't clobber either, and each stays warm for --reuse.
@@ -154,6 +162,6 @@ run docker run --rm "${tty_args[@]}" --privileged \
     "${fast_mounts[@]}" \
     --workdir /pkg \
     obs-build-image \
-    osc --config /tmp/osc.config build --trust-all-projects "${vm_args[@]}" "${fast_args[@]}" \
+    osc --config /tmp/osc.config build --trust-all-projects "${vm_args[@]}" "${jobs_args[@]}" "${fast_args[@]}" \
         --alternative-project home:p4lang --local-package \
         "$repo" "$arch" "$dsc"
