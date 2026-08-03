@@ -9,7 +9,7 @@ latest-source-package package tag:
 latest package tag: (latest-source-package package tag)
     ./scripts/osc-upload {{obs_latest_project}} p4lang-{{package}} \
         build/{{package}}/p4lang-{{package}}_*.dsc \
-        build/{{package}}/p4lang-{{package}}_*.orig.tar.* \
+        build/{{package}}/p4lang-{{package}}_*.orig*.tar.* \
         build/{{package}}/p4lang-{{package}}_*.debian.tar.*
 
 # Build <srcdir>'s .dsc locally for [repo] [arch] via osc-in-Docker.

@@ -15,7 +15,6 @@ Build-Depends:
     libboost-graph-dev,
     libboost-iostreams-dev,
     libfl-dev,
-    libabsl-dev,
     libgc-dev,
     libgmp-dev,
     libbpf-dev,

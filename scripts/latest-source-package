@@ -32,6 +32,59 @@ declare -A source_name=(
     [ptf]="p4lang-ptf"
 )
 
+# Vendor the 3 packages we can't take from the system yet.
+#
+# Ideally we'd get all our deps from the system, but that is future work.
+#
+# WARNING: Keep these in sync with the versions specified in CMakeLists.txt.
+vendor_p4c_deps() {
+    local srctree="$1" dest="$2" name="$3" ver="$4"
+
+    # Abseil is vendored because the system version is too old for protobuf
+    # 25.3, and Debian's abseil has a separate packaging problem anyway. We need
+    # to drop some ancient macro usage
+    # (https://salsa.debian.org/debian/abseil/-/merge_requests/5)
+    vendor_tarball "$srctree/abseil" "$dest/${name}_${ver}.orig-abseil.tar.gz" \
+        https://github.com/abseil/abseil-cpp/releases/download/20240116.1/abseil-cpp-20240116.1.tar.gz \
+        3c743204df78366ad2eaf236d6631d83f6bc928d1705dd0000b872e53b73dc6a
+
+    # The protobuf on Ubuntu 22.04 is just ancient. Plus it depends on the
+    # system abseil, which doesn't work.
+    vendor_tarball "$srctree/protobuf" "$dest/${name}_${ver}.orig-protobuf.tar.gz" \
+        https://github.com/protocolbuffers/protobuf/releases/download/v25.3/protobuf-25.3.tar.gz \
+        d19643d265b978383352b3143f04c0641eea75a75235c111cc01a1350173180e
+
+    # We haven't packaged p4runtime yet.
+    vendor_git "$srctree/p4runtime" "$dest/${name}_${ver}.orig-p4runtime.tar.gz" \
+        https://github.com/p4lang/p4runtime.git ec4eb5ef70dbcbcbf2f8357a4b2b8c2f218845a5
+}
+
+# Fetch a pinned tarball into <out> and unpack it under <dir> as a quilt orig
+# component.
+vendor_tarball() {
+    local dir="$1" out="$2" url="$3" sha="$4"
+    echo "Vendoring $url"
+    curl -fSL "$url" -o "$out"
+    echo "$sha  $out" | sha256sum -c -
+    mkdir -p "$dir"
+    tar -xzf "$out" --strip-components=1 -C "$dir"
+}
+
+# vendor_tarball for a git dep pinned to a commit
+vendor_git() {
+    local dir="$1" out="$2" repo="$3" commit="$4"
+    local sub; sub=$(basename "$dir")
+    echo "Vendoring $repo @ $commit"
+    local tmp; tmp=$(mktemp -d)
+    git clone -q "$repo" "$tmp/$sub"
+    git -C "$tmp/$sub" checkout -q "$commit"
+    rm -rf "$tmp/$sub/.git"
+    tar -C "$tmp" -czf "$out" "$sub"
+    mkdir -p "$dir"
+    tar -xzf "$out" --strip-components=1 -C "$dir"
+    rm -rf "$tmp"
+}
+
 pkg="${1:?Usage: latest-source-package <package> <tag>}"
 tag="${2:?Usage: latest-source-package <package> <tag>}"
 [[ -v upstream_repo[$pkg] ]] || die "unknown package: $pkg"
@@ -73,6 +126,11 @@ orig_tarball="${src_name}_${upstream_version}.orig.tar.gz"
 tar -C "$workdir/$pkg" -czf "$workdir/$orig_tarball" \
     --exclude=debian --exclude=.pc --exclude=.git .
 
+# -- Vendor p4c's FetchContent deps for the offline build (after the main orig) --
+if [[ "$pkg" == p4c ]]; then
+    vendor_p4c_deps "$workdir/$pkg" "$workdir" "$src_name" "$upstream_version"
+fi
+
 # -- Source package --
 (
     cd "$workdir/$pkg"
@@ -85,6 +143,14 @@ mkdir -p "$outdir"
 rm -f "$outdir"/*
 
 echo "Copying output files to $outdir/..."
-cp "$workdir"/*.dsc "$workdir"/*.orig.tar.gz "$workdir"/*.debian.tar.* "$outdir/"
+shopt -s nullglob
+outputs=(
+    "$workdir"/*.dsc
+    "$workdir"/*.orig.tar.*
+    "$workdir"/*.orig-*.tar.*
+    "$workdir"/*.debian.tar.*
+)
+shopt -u nullglob
+cp "${outputs[@]}" "$outdir/"
 
 echo "Done. Source package for ${src_name} ${deb_version} is in $outdir/."
