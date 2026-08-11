@@ -18,6 +18,7 @@ Build-Depends:
     libgc-dev,
     libgmp-dev,
     libbpf-dev,
+    libz3-dev,
     pkg-config,
     tcpdump,
     libelf-dev,

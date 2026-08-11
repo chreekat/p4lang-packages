@@ -32,7 +32,7 @@ declare -A source_name=(
     [ptf]="p4lang-ptf"
 )
 
-# Vendor the 3 packages we can't take from the system yet.
+# Vendor the deps we can't take from the system yet.
 #
 # Ideally we'd get all our deps from the system, but that is future work.
 #
@@ -57,6 +57,10 @@ vendor_p4c_deps() {
     # We haven't packaged p4runtime yet.
     vendor_git "$srctree/p4runtime" "$dest/${name}_${ver}.orig-p4runtime.tar.gz" \
         https://github.com/p4lang/p4runtime.git ec4eb5ef70dbcbcbf2f8357a4b2b8c2f218845a5
+
+    # The test tools render test templates with inja, which Ubuntu doesn't ship.
+    vendor_git "$srctree/inja" "$dest/${name}_${ver}.orig-inja.tar.gz" \
+        https://github.com/pantor/inja.git 3741c73ba78babd2ed88f2acf2fcd6dafdb878e8
 }
 
 # Fetch a pinned tarball into <out> and unpack it under <dir> as a quilt orig

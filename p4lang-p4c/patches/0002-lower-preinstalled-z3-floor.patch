@@ -1,0 +1,15 @@
+Description: Lower the preinstalled-Z3 floor to the version Ubuntu ships
+ 4.8.12 is still "Fairly recent", and it's included in 22.04.
+Author: Bryan Richter <b@chreekat.net>
+Forwarded: no
+--- a/cmake/Z3.cmake
++++ b/cmake/Z3.cmake
+@@ -7,7 +7,7 @@
+
+   if(USE_PREINSTALLED_Z3)
+     # We need a fairly recent version of Z3.
+-    set(Z3_MIN_VERSION "4.8.14")
++    set(Z3_MIN_VERSION "4.8.12")
+     # Anything above 4.12+ does not work with libGC and causes crashes. The reason is
+     # that malloc_usable_size() does not seem to be supported in libgc.
+     # https://github.com/Z3Prover/z3/blob/b0fef6429fb29a33eb14adf9a61353b59f0f7fd0/src/util/memory_manager.cpp#L319
