@@ -60,13 +60,18 @@ This file contains [control information](https://www.debian.org/doc/debian-polic
 
 This is an executable Makefile that is used to create the package. Like any other Makefile, it consists of several rules, each of which defines a target and how it is carried out.
 
-### `changelog.in`
+### `changelog`
 
-The template the shipped `debian/changelog` is synthesized from. It records the
-packaging changes we make to a release; the upstream version comes from the git
-tag being built, so most releases need no entry here at all. Add one only to
-re-release an unchanged upstream version, naming the new Debian revision (for
-example `1.2.5.15-2`) and what changed.
+The record of every version we publish, and what it changed. Its top entry
+decides the version a build produces, so recording the version comes first:
+
+```bash
+just changelog p4c 1.2.6.0-1    # packaging a new upstream release
+just changelog p4c 1.2.6.0-2    # re-releasing it with the packaging fixed
+```
+
+Re-releasing needs a new revision because apt upgrades on version alone —
+republishing under a version someone already installed reaches nobody.
 
 ### `copyright`
 

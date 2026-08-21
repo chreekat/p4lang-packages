@@ -1,6 +1,12 @@
 # OBS project the latest channel publishes to; tracks upstream release tags.
 obs_latest_project := "home:p4lang:latest"
 
+# Record a new <version> (e.g. 1.2.6.0-1) for <package>, opening $EDITOR for the entry.
+changelog package version:
+    DEBEMAIL="$(git config user.name) <$(git config user.email)>" \
+        dch --changelog p4lang-{{package}}/changelog \
+            --newversion {{version}} --distribution unstable
+
 # Build a <package> source package at upstream <tag> (no upload).
 latest-source-package package tag:
     ./scripts/latest-source-package {{package}} {{tag}}

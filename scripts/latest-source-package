@@ -104,6 +104,16 @@ src_name="${source_name[$pkg]}"
 upstream_version="${tag#v}"
 echo "Building $pkg from tag $tag  ->  upstream version: $upstream_version"
 
+# -- Settle the Debian version --
+# The changelog decides it, and nothing here writes to the changelog: a version
+# is published only if someone recorded the decision to publish it.
+deb_version=$(dpkg-parsechangelog -l "$deb_dir/changelog" -S Version)
+if [[ "${deb_version%-*}" != "$upstream_version" ]]; then
+    die "$deb_dir/changelog describes $deb_version, not $upstream_version.
+       Record the new version first:  just changelog $pkg ${upstream_version}-1"
+fi
+echo "Debian version: $deb_version"
+
 # -- Clone that tag --
 workdir=$(mktemp -d)
 trap 'rm -rf "$workdir"' EXIT
@@ -112,32 +122,8 @@ echo "Cloning $repo_url @ $tag into $workdir/$pkg..."
 git clone --recurse-submodules --depth 1 -b "$tag" "$repo_url" "$workdir/$pkg"
 
 # -- Drop in our debian/ --
-# changelog.in becomes the real changelog: we prepend the synthesized entry below.
 rm -rf "$workdir/$pkg/debian"
 cp -a "$deb_dir" "$workdir/$pkg/debian"
-mv "$workdir/$pkg/debian/changelog.in" "$workdir/$pkg/debian/changelog"
-
-# -- Settle the Debian version --
-# The tag gives the upstream version; changelog.in gives the Debian revision. To
-# rebuild an unchanged upstream release with changed packaging, add an entry to
-# changelog.in naming the new revision and why -- that entry ships as written. A
-# tag changelog.in says nothing about is a first packaging, so we synthesize an
-# entry at revision 1.
-changelog_version=$(dpkg-parsechangelog -l "$deb_dir/changelog.in" -S Version)
-if [[ "${changelog_version%-*}" == "$upstream_version" ]]; then
-    deb_version="$changelog_version"
-    echo "Debian version: $deb_version (from changelog.in)"
-else
-    deb_version="${upstream_version}-1"
-    echo "Debian version: $deb_version (first packaging of $tag)"
-    (
-        cd "$workdir/$pkg"
-        DEBEMAIL="${DEBEMAIL:-$(dpkg-parsechangelog -S Maintainer)}" \
-            dch --newversion "$deb_version" \
-                --distribution unstable \
-                "Latest channel build from upstream tag ${tag}"
-    )
-fi
 
 # -- Orig tarball --
 orig_tarball="${src_name}_${upstream_version}.orig.tar.gz"
