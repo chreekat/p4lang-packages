@@ -60,9 +60,13 @@ This file contains [control information](https://www.debian.org/doc/debian-polic
 
 This is an executable Makefile that is used to create the package. Like any other Makefile, it consists of several rules, each of which defines a target and how it is carried out.
 
-### `changelog`
+### `changelog.in`
 
-This file contains a brief explanation of changes and updates to the package.
+The template the shipped `debian/changelog` is synthesized from. It records the
+packaging changes we make to a release; the upstream version comes from the git
+tag being built, so most releases need no entry here at all. Add one only to
+re-release an unchanged upstream version, naming the new Debian revision (for
+example `1.2.5.15-2`) and what changed.
 
 ### `copyright`
 
