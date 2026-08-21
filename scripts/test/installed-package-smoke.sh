@@ -49,13 +49,13 @@ echo "deb [signed-by=/etc/apt/keyrings/p4lang.gpg] $REPO_URL ./" > /etc/apt/sour
 apt-get update -qq >/tmp/apt.log 2>&1 || die "apt-get update against the repo"
 ok "repo added and indexed"
 
-echo "== install =="
-# Plain install of the top package: bmv2 and pi must come in as dependencies.
-apt-get install -y p4lang-p4c >/tmp/apt.log 2>&1 || die "apt-get install p4lang-p4c"
-ok "apt-get install p4lang-p4c"
-for p in p4lang-p4c p4lang-bmv2 p4lang-pi; do
-    if dpkg -s "$p" >/dev/null 2>&1; then ok "$p installed"; else ng "$p installed"; fi
-done
+echo "== minimal install =="
+# --no-install-recommends pins that the hard Depends alone are enough to run the
+# compiler.
+apt-get install -y --no-install-recommends p4lang-p4c >/tmp/apt.log 2>&1 \
+    || die "apt-get install --no-install-recommends p4lang-p4c"
+ok "minimal install"
+if command -v cc >/dev/null 2>&1; then ok "cc available"; else ng "cc available"; fi
 
 mkdir -p /work && cd /work
 cat > basic.p4 <<'P4'
@@ -106,6 +106,16 @@ control DeparserImpl(packet_out packet, in headers_t hdr) {
 V1Switch(ParserImpl(), VerifyChecksumImpl(), IngressImpl(), EgressImpl(),
          ComputeChecksumImpl(), DeparserImpl()) main;
 P4
+
+run    "p4c runs minimally"     p4c --target bmv2 --arch v1model -o /work /work/basic.p4
+rm -f /work/basic.json
+
+echo "== full install =="
+# Recommends should pull the runtime in for the default `apt install` path.
+apt-get install -y p4lang-p4c >/tmp/apt.log 2>&1 || die "apt-get install p4lang-p4c"
+for p in p4lang-p4c p4lang-bmv2 p4lang-pi; do
+    if dpkg -s "$p" >/dev/null 2>&1; then ok "$p installed"; else ng "$p installed"; fi
+done
 
 echo "== p4c =="
 run    "p4c --version"          p4c --version
