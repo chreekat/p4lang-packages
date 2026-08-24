@@ -57,8 +57,6 @@ Depends:
     ${misc:Depends},
     ${python3:Depends},
     gcc
-Recommends:
-    p4lang-bmv2
 Suggests:
     clang,
     libbpf-dev,
