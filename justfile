@@ -7,12 +7,12 @@ changelog package version:
         dch --changelog p4lang-{{package}}/changelog \
             --newversion {{version}} --distribution unstable
 
-# Build a <package> source package at upstream <tag> (no upload).
-latest-source-package package tag:
-    ./scripts/latest-source-package {{package}} {{tag}}
+# Generate build/<package> source package at upstream <tag>
+generate-src-pkg package tag:
+    ./scripts/generate-src-pkg {{package}} {{tag}}
 
 # Build <package> at upstream <tag> and upload it to the latest channel's OBS project.
-latest package tag: (latest-source-package package tag)
+latest package tag: (generate-src-pkg package tag)
     ./scripts/osc-upload {{obs_latest_project}} p4lang-{{package}} \
         build/{{package}}/p4lang-{{package}}_*.dsc \
         build/{{package}}/p4lang-{{package}}_*.orig*.tar.* \

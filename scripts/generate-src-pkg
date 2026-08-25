@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+#
+# Build a Debian source package for a package at a given upstream tag.
+#
+# Usage: generate-src-pkg <package> <tag>
+#
+# Supported packages: pi, bmv2, p4c, ptf
+# <tag> is the upstream git tag to build (e.g. v0.1.3 or 1.15.4).
+#
+# Outputs .dsc, .orig.tar.gz, .debian.tar.* to build/<package>/.
+
+set -Eeuo pipefail
+
+die() { echo "error: $*" >&2; exit 1; }
+
+script_dir=$(dirname "$(readlink -f "$0")")
+
+pkg="${1:?Usage: latest-source-package <package> <tag>}"
+tag="${2:?Usage: latest-source-package <package> <tag>}"
+
+#
+# Set package-specific vars
+#
+
+declare -A upstream_repo=(
+    [pi]="https://github.com/p4lang/PI"
+    [bmv2]="https://github.com/p4lang/behavioral-model"
+    [p4c]="https://github.com/p4lang/p4c"
+    [ptf]="https://github.com/p4lang/ptf"
+)
+declare -A debian_dir=(
+    [pi]="p4lang-pi"
+    [bmv2]="p4lang-bmv2"
+    [p4c]="p4lang-p4c"
+    [ptf]="p4lang-ptf"
+)
+declare -A source_name=(
+    [pi]="p4lang-pi"
+    [bmv2]="p4lang-bmv2"
+    [p4c]="p4lang-p4c"
+    [ptf]="p4lang-ptf"
+)
+
+[[ -v upstream_repo[$pkg] ]] || die "unknown package: \"$pkg\". Known packages: ${!upstream_repo[@]}"
+
+repo_url="${upstream_repo[$pkg]}"
+deb_dir="${debian_dir[$pkg]}"
+src_name="${source_name[$pkg]}"
+
+[[ -d "$deb_dir" ]] || die "cannot find $deb_dir/ . Run from the repo root."
+
+#
+# Main
+#
+
+# Normalize version number
+
+# pi/p4c/ptf use tags like v0.1.3. bmv2 uses e.g. 1.15.4 (no v* prefix)
+upstream_version="${tag#v}"
+echo "Building $pkg"
+echo "            from tag: $tag."
+echo "    upstream version: $upstream_version"
+
+# Validate the version number
+
+# The debian package's version is set in the changelog and by filenames we
+# create. If they don't match up, the build will fail.
+deb_version=$(dpkg-parsechangelog -l "$deb_dir/changelog" -S Version)
+if [[ "${deb_version%-*}" != "$upstream_version" ]]; then
+    die "$deb_dir/changelog describes $deb_version, not $upstream_version. dpkg-source would fail!"
+fi
+
+# Prepare the source tarball
+
+workdir=$(mktemp -d)
+trap 'rm -rf "$workdir"' EXIT
+
+# FIXME: We should switch to immutable releases on GitHub. Then we can download
+# and verify artifacts without going through git.
+echo "Cloning $repo_url @ $tag into $workdir/$pkg..."
+git clone -c advice.detachedHead=false --quiet --recurse-submodules --depth 1 -b "$tag" "$repo_url" "$workdir/$pkg"
+
+rm -rf "$workdir/$pkg/debian"
+cp -a "$deb_dir" "$workdir/$pkg/debian"
+
+echo "Building tarball..."
+# Make tarballs reproducible by
+#
+#  - pinning mtime to commit date
+#  - resetting ownership
+#  - ordering files
+mtime=$(git -C "$workdir/$pkg" log -1 --format=%cI)
+orig_tarball="${src_name}_${upstream_version}.orig.tar.gz"
+tar -C "$workdir/$pkg" -czf "$workdir/$orig_tarball" \
+    --exclude=debian --exclude=.pc --exclude=.git \
+    --sort=name --mtime="$mtime" --owner=0 --group=0 --numeric-owner \
+    .
+
+if [[ "$pkg" == p4c ]]; then
+    echo "[p4c-specific] Vendoring dependencies..."
+    "$script_dir/vendor-p4c-deps" "$workdir/$pkg" "$workdir" "$src_name" "$upstream_version"
+fi
+
+echo "Running dpkg-source..."
+(
+    cd "$workdir/$pkg"
+    dpkg-source -b .
+)
+
+#
+# Create the source package
+#
+
+outdir="build/$pkg"
+mkdir -p "$outdir"
+rm -f "$outdir"/*
+
+echo "Copying output files to $outdir..."
+(
+shopt -s nullglob
+outputs=(
+    "$workdir"/*.dsc
+    "$workdir"/*.orig.tar.*
+    "$workdir"/*.orig-*.tar.*
+    "$workdir"/*.debian.tar.*
+)
+cp -t "$outdir" "${outputs[@]}"
+)
+
+echo "Done. Source package for ${src_name} ${deb_version} is in $outdir/."
