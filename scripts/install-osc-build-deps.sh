@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
 # Provision an Ubuntu container with osc + the virtualization stack `osc build`
-# needs: KVM for native builds and qemu for cross-arch. Idempotent; invoked by
-# scripts/build-package's one-time image bootstrap.
+# needs: KVM for native builds and qemu for cross-arch.
 
 set -euo pipefail
+
 export DEBIAN_FRONTEND=noninteractive
 ln -fs /usr/share/zoneinfo/Etc/UTC /etc/localtime
 
@@ -25,5 +25,5 @@ deps=(
 # shellcheck disable=SC2068
 apt-get -y install ${deps[@]}
 
-# osc looks for the initrd at /boot/initrd; this path is not configurable.
+# osc looks for the initrd at /boot/initrd.
 ln -sf /boot/initrd.img /boot/initrd
