@@ -47,15 +47,15 @@ dsc="$(basename "${dscs[0]}")"
 # osc caches _buildinfo-/_buildconfig- files in its cwd, and --noinit/--offline
 # read them back, so the workdir must persist across runs.
 #
-# Per package, since the filenames are keyed by repo-arch only, and would
-# otherwise overwrite each other.
+# We persist per package, since the filenames are keyed by repo-arch only, and
+# would otherwise overwrite each other.
 workdir_host="$PWD/build/.osc-work/$(basename "$srcdir_abs")"
 mkdir -p "$workdir_host"
+
 # osc's --noinit/--offline path insists the cwd is an .osc package working
 # copy (it reads store.build_repositories unconditionally, even with
-# --local-package). These two markers satisfy that probe; deliberately no
-# _osclib_version, so osc's strict store check still fails and it keeps
-# treating the build as store-less, caching buildinfo in the workdir root.
+# --local-package). Give it the bare minimum files to run without actually
+# creating a full .osc copy.
 mkdir -p "$workdir_host/.osc"
 printf 'home:p4lang\n' > "$workdir_host/.osc/_project"
 printf '%s\n' "${dsc%%_*}" > "$workdir_host/.osc/_package"
@@ -134,6 +134,25 @@ if ! docker image inspect obs-build-image &>/dev/null; then
         ubuntu:latest ./scripts/install-osc-build-deps.sh
     run docker commit obs-build-bootstrap obs-build-image
     run docker rm obs-build-bootstrap
+fi
+
+# The offline tier skips the test suite because it takes *forever*.
+#
+# All other tiers still build with tests.
+#
+# Mechanism: build-recipe-dsc turns a %deb_build_options macro in the build
+# config into DEB_BUILD_OPTIONS. When set to nocheck, dh skips dh_auto_test. So
+# we set that macro in the cache.
+#
+# The cache is root-owned (osc writes it from inside the container), so the
+# append runs in the container too.
+if (( offline )); then
+    run docker run --rm \
+        --mount "type=bind,source=$workdir_host,target=/work" \
+        obs-build-image sh -c \
+        "grep -q '^%deb_build_options nocheck\$' /work/_buildconfig-$repo-$arch \
+            || printf 'Macros:\n%%deb_build_options nocheck\n' >> /work/_buildconfig-$repo-$arch"
+    echo "tests skipped (but can be enabled with --clean)" >&2
 fi
 
 # vm-type: a native arch uses KVM for a clean build; a foreign arch chroots under
