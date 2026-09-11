@@ -100,7 +100,7 @@ tar -C "$workdir/$pkg" -czf "$workdir/$orig_tarball" \
 
 if [[ "$pkg" == p4c ]]; then
     echo "[p4c-specific] Vendoring dependencies..."
-    "$script_dir/vendor-p4c-deps" "$workdir/$pkg" "$workdir" "$src_name" "$upstream_version"
+    "$script_dir/vendor-p4c-deps" "$workdir/$pkg" "$workdir"
 fi
 
 echo "Running dpkg-source..."

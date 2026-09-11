@@ -2,37 +2,54 @@
 #
 # Vendor p4c's CMake FetchContent dependencies as quilt components.
 #
-# Usage: vendor-p4c-deps <srctree> <destdir> <source-name> <upstream-version>
+# Usage: vendor-p4c-deps <srctree> <destdir>
+#        vendor-p4c-deps --update
 #
 # <srctree> is a checked-out p4c tag. Each dep is unpacked into <srctree>/<dep>/
 # for debian/rules to point FETCHCONTENT_SOURCE_DIR_* at, and written to
-# <destdir>/<source-name>_<upstream-version>.orig-<dep>.tar.gz.
+# <destdir>/p4lang-p4c_<upstream-version>.orig-<dep>.tar.gz, the name
+# dpkg-source requires of a component tarball. The upstream version comes from
+# p4lang-p4c/changelog.
 #
 # p4c fetches these during its CMake build, which a sandboxed .deb build cannot
 # do. We fetch them ahead of time instead. Our pins are checked against p4c's
 # own declarations first, so a p4c bump that moves a dep fails here rather than
 # silently building against the wrong tree.
+#
+# --update rewrites the pins below to whatever p4c declares at the version in
+# p4lang-p4c/changelog, verifying every tarball hash by download.
 
 set -Eeuo pipefail
 
 die() { echo "error: $*" >&2; exit 1; }
 
-srctree="${1:?Usage: vendor-p4c-deps <srctree> <destdir> <source-name> <upstream-version>}"
-destdir="${2:?Usage: vendor-p4c-deps <srctree> <destdir> <source-name> <upstream-version>}"
-name="${3:?Usage: vendor-p4c-deps <srctree> <destdir> <source-name> <upstream-version>}"
-ver="${4:?Usage: vendor-p4c-deps <srctree> <destdir> <source-name> <upstream-version>}"
+self=$(readlink -f "$0")
 
-[[ -f "$srctree/CMakeLists.txt" ]] || die "$srctree is not a p4c source tree"
+usage="Usage: vendor-p4c-deps <srctree> <destdir> | --update"
+update=0
+if [[ "${1:-}" == --update ]]; then
+    update=1
+else
+    srctree="${1:?$usage}"
+    destdir="${2:?$usage}"
+    [[ -f "$srctree/CMakeLists.txt" ]] || die "$srctree is not a p4c source tree"
+fi
+
+# Both modes work at the version named by the changelog.
+[[ -f p4lang-p4c/changelog ]] || die "cannot find p4lang-p4c/changelog. Run from the repo root."
+name=p4lang-p4c
+deb_version=$(dpkg-parsechangelog -l p4lang-p4c/changelog -S Version)
+ver="${deb_version%-*}"
 
 #
 # Our pins
 #
 # Each is asserted against p4c's own declaration below, so these are a mirror,
-# not an independent decision.
+# not an independent decision. --update refreshes them.
 #
 
-abseil_version=20240116.1
-abseil_sha=3c743204df78366ad2eaf236d6631d83f6bc928d1705dd0000b872e53b73dc6a
+abseil_version=20240722.1
+abseil_sha=40cee67604060a7c8794d931538cb55f4d444073e556980c88b6c49bb9b19bb7
 
 protobuf_version=25.3
 protobuf_sha=d19643d265b978383352b3143f04c0641eea75a75235c111cc01a1350173180e
@@ -51,7 +68,7 @@ p4runtime_cmake="CMakeLists.txt"
 inja_cmake="backends/p4tools/modules/testgen/CMakeLists.txt"
 
 #
-# Pin checking
+# Reading p4c's declarations
 #
 
 # The value of <field> inside p4c's FetchContent_Declare block for <dep>.
@@ -71,11 +88,15 @@ declared_var() {
     sed -nE "s/^[[:space:]]*set\(${var}[[:space:]]+\"?([^\")]+)\"?\).*/\1/p" "$file" | head -1
 }
 
+#
+# Pin checking
+#
+
 assert_pin() {
     local what="$1" want="$2" got="$3" where="$4"
     [[ -n "$got" ]] || die "cannot read $what from $where -- p4c's CMake layout changed"
     [[ "$got" == "$want" ]] \
-        || die "$what drift: p4c declares '$got', we vendor '$want' ($where)"
+        || die "$what drift: p4c declares '$got', we vendor '$want' ($where). Run 'just revendor'?"
 }
 
 check_pins() {
@@ -142,5 +163,75 @@ vendor_deps() {
         "$inja_sha"
 }
 
-check_pins
-vendor_deps
+#
+# Pin updating (--update)
+#
+
+declared() {
+    local what="$1" val="$2"
+    [[ -n "$val" ]] || die "cannot read $what -- p4c's CMake layout changed"
+    echo "$val"
+}
+
+fetched_sha() {
+    local url="$1"
+    echo "Fetching $url" >&2
+    curl -fsSL "$url" -o "$workdir/tarball" || die "cannot fetch $url"
+    sha256sum "$workdir/tarball" | cut -d' ' -f1
+}
+
+set_pin() {
+    local var="$1" val="$2"
+    grep -q "^$var=" "$self" || die "no pin '$var=' in $self"
+    sed -i "s/^$var=.*/$var=$val/" "$self"
+}
+
+update_pins() {
+    local tag raw sha f
+    tag="v$ver"
+    raw="https://raw.githubusercontent.com/p4lang/p4c/$tag"
+
+    echo "Reading p4c's dependency declarations at $tag..."
+    workdir=$(mktemp -d)
+    trap 'rm -rf "$workdir"' EXIT
+    for f in "$abseil_cmake" "$protobuf_cmake" "$p4runtime_cmake" "$inja_cmake"; do
+        curl -fsSL --create-dirs -o "$workdir/$f" "$raw/$f" \
+            || die "cannot fetch $raw/$f -- does tag $tag exist?"
+    done
+
+    abseil_version=$(declared "abseil version" "$(declared_var "$workdir/$abseil_cmake" P4C_ABSEIL_VERSION)")
+    abseil_sha=$(declared "abseil sha256" "$(declared_field "$workdir/$abseil_cmake" abseil URL_HASH)")
+    protobuf_version=$(declared "protobuf version" "$(declared_var "$workdir/$protobuf_cmake" P4C_PROTOBUF_VERSION)")
+    protobuf_sha=$(declared "protobuf sha256" "$(declared_field "$workdir/$protobuf_cmake" protobuf URL_HASH)")
+    p4runtime_commit=$(declared "p4runtime commit" "$(declared_field "$workdir/$p4runtime_cmake" p4runtime GIT_TAG)")
+    inja_commit=$(declared "inja commit" "$(declared_field "$workdir/$inja_cmake" inja GIT_TAG)")
+
+    # Hash every tarball ourselves: for abseil/protobuf the result must match
+    # p4c's declared hash; for the commit-pinned deps (no upstream hash
+    # exists) our hash of GitHub's archive becomes the pin.
+    sha=$(fetched_sha "https://github.com/abseil/abseil-cpp/releases/download/${abseil_version}/abseil-cpp-${abseil_version}.tar.gz")
+    [[ "$sha" == "$abseil_sha" ]] || die "abseil tarball hashes $sha but p4c declares $abseil_sha"
+    sha=$(fetched_sha "https://github.com/protocolbuffers/protobuf/releases/download/v${protobuf_version}/protobuf-${protobuf_version}.tar.gz")
+    [[ "$sha" == "$protobuf_sha" ]] || die "protobuf tarball hashes $sha but p4c declares $protobuf_sha"
+    p4runtime_sha=$(fetched_sha "https://github.com/p4lang/p4runtime/archive/${p4runtime_commit}.tar.gz")
+    inja_sha=$(fetched_sha "https://github.com/pantor/inja/archive/${inja_commit}.tar.gz")
+
+    set_pin abseil_version "$abseil_version"
+    set_pin abseil_sha "$abseil_sha"
+    set_pin protobuf_version "$protobuf_version"
+    set_pin protobuf_sha "$protobuf_sha"
+    set_pin p4runtime_commit "$p4runtime_commit"
+    set_pin p4runtime_sha "$p4runtime_sha"
+    set_pin inja_commit "$inja_commit"
+    set_pin inja_sha "$inja_sha"
+
+    echo "Pins in $self now match p4c $tag:"
+    git --no-pager diff -- "$self"
+}
+
+if (( update )); then
+    update_pins
+else
+    check_pins
+    vendor_deps
+fi
