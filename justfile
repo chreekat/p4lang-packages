@@ -1,5 +1,5 @@
 # OBS project to push to
-obs_project := "home:p4lang:latest"
+obs_project := "home:p4lang"
 
 # Check that scripts, justfile, and workflows are self-consistent.
 smoke:

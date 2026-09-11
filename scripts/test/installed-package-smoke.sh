@@ -11,7 +11,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 1
 
-project="${1:-home:p4lang:latest}"
+project="${1:-home:p4lang}"
 distro="${2:-xUbuntu_22.04}"
 image="${SMOKE_IMAGE:-ubuntu:22.04}"
 # OBS serves project home:p4lang:latest at .../home:/p4lang:/latest/

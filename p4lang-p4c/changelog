@@ -1,3 +1,9 @@
+p4lang-p4c (1.2.5.17-1) unstable; urgency=medium
+
+  * Upstream release
+
+ -- Bryan Richter <b@chreekat.net>  Fri, 11 Sep 2026 16:24:26 +0300
+
 p4lang-p4c (1.2.5.15-2) unstable; urgency=medium
 
   * Depend on what p4c runs, not what built it. Installing the compiler pulled
