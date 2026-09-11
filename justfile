@@ -1,5 +1,5 @@
-# OBS project the latest channel publishes to; tracks upstream release tags.
-obs_latest_project := "home:p4lang:latest"
+# OBS project to push to
+obs_project := "home:p4lang:latest"
 
 # Add a changelog entry.
 changelog-add package:
