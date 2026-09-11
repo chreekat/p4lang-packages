@@ -22,9 +22,9 @@ build-pkg +args:
 
 # Build <package> at upstream <tag> and upload it to the latest channel's OBS project.
 upload-src-pkg package tag: (generate-src-pkg package tag)
-    ./scripts/osc-upload {{obs_project}} p4lang-{{package}} build/{{package}}
+    ./scripts/upload-src-pkg {{obs_project}} p4lang-{{package}} build/{{package}}
 
-# Drop the cached build image so the next build-package re-provisions it.
+# Drop the cached build image so the next build-pkg re-provisions it.
 clean-image:
     docker rmi obs-build-image
 
