@@ -8,30 +8,12 @@
 # are what get uploaded. Credentials come from osc's normal config.
 
 set -euo pipefail
-
 die() { echo "error: $*" >&2; exit 1; }
 
 usage="Usage: osc-upload <project> <package> <srcdir>"
 project="${1:?$usage}"
 package="${2:?$usage}"
 srcdir="${3:?$usage}"
-
-if [[ -n "${OBS_USERNAME:-}" && -n "${OBS_PASSWORD:-}" ]]; then
-    oscrc=$(mktemp)
-    chmod 600 "$oscrc"
-    cat > "$oscrc" <<EOF
-[general]
-apiurl = https://api.opensuse.org
-
-[https://api.opensuse.org]
-user = ${OBS_USERNAME}
-pass = ${OBS_PASSWORD}
-EOF
-    osc() { command osc --config "$oscrc" "$@"; }
-else
-    echo "OBS_USERNAME/OBS_PASSWORD not set; using osc's default config (~/.oscrc)."
-    osc() { command osc "$@"; }
-fi
 
 [[ -d "$srcdir" ]] || die "no such dir: $srcdir"
 shopt -s nullglob; dscs=( "$srcdir"/*.dsc ); shopt -u nullglob
