@@ -4,13 +4,14 @@ obs_project := "home:p4lang:latest"
 # Add a changelog entry.
 changelog-add package:
     DEBEMAIL="$(git config user.name) <$(git config user.email)>" \
-        dch --changelog p4lang-{{package}}/changelog
+        dch --changelog p4lang-{{package}}/changelog --distribution unstable
 
 # Start a changelog entry for new upstream <tag> at Debian revision 1.
 changelog-upstream-add package tag:
     DEBEMAIL="$(git config user.name) <$(git config user.email)>" \
         dch --changelog p4lang-{{package}}/changelog \
         --newversion {{trim_start_match(tag, "v")}}-1 \
+        --distribution unstable \
         Upstream release
 
 # Generate build/<package> source package at upstream <tag>
