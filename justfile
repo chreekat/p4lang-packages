@@ -1,14 +1,17 @@
 # OBS project to push to
 obs_project := "home:p4lang:latest"
 
-# Add a changelog entry.
+# Add a changelog entry. The trailer identity is DEBFULLNAME/DEBEMAIL if set,
+# else git's.
 changelog-add package:
-    DEBEMAIL="$(git config user.name) <$(git config user.email)>" \
+    DEBFULLNAME="${DEBFULLNAME:-$(git config user.name)}" \
+    DEBEMAIL="${DEBEMAIL:-$(git config user.email)}" \
         dch --changelog p4lang-{{package}}/changelog --distribution unstable
 
 # Start a changelog entry for new upstream <tag> at Debian revision 1.
 changelog-upstream-add package tag:
-    DEBEMAIL="$(git config user.name) <$(git config user.email)>" \
+    DEBFULLNAME="${DEBFULLNAME:-$(git config user.name)}" \
+    DEBEMAIL="${DEBEMAIL:-$(git config user.email)}" \
         dch --changelog p4lang-{{package}}/changelog \
         --newversion {{trim_start_match(tag, "v")}}-1 \
         --distribution unstable \
