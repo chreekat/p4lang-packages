@@ -7,6 +7,9 @@
 #
 # Supported packages: pi, bmv2, p4c, ptf
 #
+# p4c's dependencies are vendored at whatever versions it declares at that
+# tag.
+#
 # Outputs .dsc, .orig.tar.gz, .debian.tar.* to build/<package>/.
 
 set -Eeuo pipefail
