@@ -9,8 +9,8 @@
 #
 # Exits 1 if the OBS package holds no source package yet.
 #
-# Credentials: as for osc-upload. OBS_USERNAME/OBS_PASSWORD are used for this
-# run only if set; otherwise osc falls back to its normal config.
+# Credentials come from osc's normal config (or the OSC_USERNAME/OSC_PASSWORD
+# env vars osc reads natively).
 
 set -euo pipefail
 
@@ -19,26 +19,7 @@ die() { echo "error: $*" >&2; exit 1; }
 project="${1:?Usage: obs-published-version <project> <package>}"
 package="${2:?Usage: obs-published-version <project> <package>}"
 
-oscrc=""
-trap '[[ -n "$oscrc" ]] && rm -f "$oscrc"' EXIT
-
-if [[ -n "${OBS_USERNAME:-}" && -n "${OBS_PASSWORD:-}" ]]; then
-    oscrc=$(mktemp)
-    chmod 600 "$oscrc"
-    cat > "$oscrc" <<RC
-[general]
-apiurl = https://api.opensuse.org
-
-[https://api.opensuse.org]
-user = ${OBS_USERNAME}
-pass = ${OBS_PASSWORD}
-RC
-    osc() { command osc --config "$oscrc" "$@"; }
-else
-    osc() { command osc "$@"; }
-fi
-
-# The .dsc is authoritative: osc-upload leaves exactly one per package, and its
+# The .dsc is authoritative: upload-src-pkg leaves exactly one per package, and its
 # Version: field is the version OBS will build.
 mapfile -t dscs < <(osc ls "$project" "$package" | grep -E '\.dsc$' || true)
 [[ ${#dscs[@]} -gt 0 ]] || die "no .dsc in ${project}/${package}; nothing published yet"
