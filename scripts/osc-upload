@@ -1,36 +1,20 @@
 #!/usr/bin/env bash
 #
-# Upload source package files to an OBS project/package.
+# Upload a source package directory to an OBS project/package.
 #
-# Usage: osc-upload <project> <package> <files...>
+# Usage: osc-upload <project> <package> <srcdir>
 #
-# Example:
-#   osc-upload home:p4lang:latest p4lang-pi *.dsc *.orig.tar.gz *.debian.tar.xz
-#
-# Credentials:
-#   - If OBS_USERNAME and OBS_PASSWORD are set, they are written to a temp
-#     oscrc (auto-deleted on exit) and used for this run only.
-#   - Otherwise, osc falls back to its normal config (~/.oscrc) and will
-#     prompt interactively if creds are missing.
+# The srcdir must contain exactly one .dsc; it and the files it references
+# are what get uploaded. Credentials come from osc's normal config.
 
 set -euo pipefail
 
 die() { echo "error: $*" >&2; exit 1; }
 
-project="${1:?Usage: osc-upload <project> <package> <files...>}"
-package="${2:?Usage: osc-upload <project> <package> <files...>}"
-shift 2
-[[ $# -gt 0 ]] || die "no files specified"
-
-workdir=$(mktemp -d)
-oscrc=""
-cleanup() {
-    rm -rf "$workdir"
-    if [[ -n "$oscrc" ]]; then
-        rm -f "$oscrc"
-    fi
-}
-trap cleanup EXIT
+usage="Usage: osc-upload <project> <package> <srcdir>"
+project="${1:?$usage}"
+package="${2:?$usage}"
+srcdir="${3:?$usage}"
 
 if [[ -n "${OBS_USERNAME:-}" && -n "${OBS_PASSWORD:-}" ]]; then
     oscrc=$(mktemp)
@@ -49,26 +33,24 @@ else
     osc() { command osc "$@"; }
 fi
 
-# -- Check out the package --
+[[ -d "$srcdir" ]] || die "no such dir: $srcdir"
+shopt -s nullglob; dscs=( "$srcdir"/*.dsc ); shopt -u nullglob
+(( ${#dscs[@]} == 1 )) || die "expected exactly one .dsc in $srcdir, found ${#dscs[@]}"
+dsc="${dscs[0]}"
+
+workdir=$(mktemp -d)
+trap 'rm -rf "$workdir"' EXIT
+
 echo "Checking out ${project}/${package}..."
 (cd "$workdir" && osc checkout "$project" "$package")
-
 pkg_dir="$workdir/$project/$package"
 [[ -d "$pkg_dir" ]] || die "checkout failed: $pkg_dir does not exist"
 
-# -- Replace source files --
-# Remove old source files (keep _meta and other OBS internals).
-find "$pkg_dir" -maxdepth 1 -type f \
-    ! -name '_*' \
-    -delete
+# Replace the old source files (keeping _meta and other OBS internals) with
+# the .dsc and everything it references.
+find "$pkg_dir" -maxdepth 1 -type f ! -name '_*' -delete
+dcmd cp "$dsc" "$pkg_dir/"
 
-echo "Copying new source files..."
-for f in "$@"; do
-    [[ -f "$f" ]] || die "file not found: $f"
-    cp "$f" "$pkg_dir/"
-done
-
-# -- Add new files and commit --
 (
     cd "$pkg_dir"
     osc addremove

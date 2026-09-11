@@ -21,11 +21,8 @@ build-pkg +args:
     ./scripts/build-pkg {{args}}
 
 # Build <package> at upstream <tag> and upload it to the latest channel's OBS project.
-latest package tag: (generate-src-pkg package tag)
-    ./scripts/osc-upload {{obs_latest_project}} p4lang-{{package}} \
-        build/{{package}}/p4lang-{{package}}_*.dsc \
-        build/{{package}}/p4lang-{{package}}_*.orig*.tar.* \
-        build/{{package}}/p4lang-{{package}}_*.debian.tar.*
+upload-src-pkg package tag: (generate-src-pkg package tag)
+    ./scripts/osc-upload {{obs_project}} p4lang-{{package}} build/{{package}}
 
 # Drop the cached build image so the next build-package re-provisions it.
 clean-image:
