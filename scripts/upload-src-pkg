@@ -2,15 +2,18 @@
 #
 # Upload a source package directory to an OBS project/package.
 #
-# Usage: osc-upload <project> <package> <srcdir>
+# Usage: upload-src-pkg <project> <package> <srcdir>
 #
 # The srcdir must contain exactly one .dsc; it and the files it references
-# are what get uploaded. Credentials come from osc's normal config.
+# are what get uploaded. Credentials come from osc's normal config (or the
+# OSC_USERNAME/OSC_PASSWORD env vars osc reads natively).
 
 set -euo pipefail
 die() { echo "error: $*" >&2; exit 1; }
 
-usage="Usage: osc-upload <project> <package> <srcdir>"
+script_dir=$(dirname "$(readlink -f "$0")")
+
+usage="Usage: upload-src-pkg <project> <package> <srcdir>"
 project="${1:?$usage}"
 package="${2:?$usage}"
 srcdir="${3:?$usage}"
@@ -19,6 +22,21 @@ srcdir="${3:?$usage}"
 shopt -s nullglob; dscs=( "$srcdir"/*.dsc ); shopt -u nullglob
 (( ${#dscs[@]} == 1 )) || die "expected exactly one .dsc in $srcdir, found ${#dscs[@]}"
 dsc="${dscs[0]}"
+
+# Never overwrite a published version in place. OBS mirrors are eventually
+# consistent, and replacing content under an unchanged version confuses them.
+# A re-release must bump the Debian revision instead.
+version=$(awk '/^Version:/ { print $2; exit }' "$dsc")
+[[ -n "$version" ]] || die "$dsc has no Version: field"
+if published=$("$script_dir/obs-published-version" "$project" "$package"); then
+    if [[ "$version" == "$published" ]]; then
+        echo "$package $version is already published on $project; nothing to upload."
+        echo "(a re-release needs a new Debian revision: just changelog-add)"
+        exit 0
+    fi
+else
+    echo "could not read the published version; assuming a first upload." >&2
+fi
 
 workdir=$(mktemp -d)
 trap 'rm -rf "$workdir"' EXIT
