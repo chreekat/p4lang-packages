@@ -1,6 +1,10 @@
 # OBS project to push to
 obs_project := "home:p4lang:latest"
 
+# Check that scripts, justfile, and workflows are self-consistent.
+smoke:
+    ./scripts/smoke
+
 # Add a changelog entry. The trailer identity is DEBFULLNAME/DEBEMAIL if set,
 # else git's.
 changelog-add package:

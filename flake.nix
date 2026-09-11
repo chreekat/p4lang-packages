@@ -14,6 +14,7 @@
             pkgs.dpkg
             pkgs.quilt
             pkgs.python3Packages.osc
+            pkgs.actionlint
           ];
         };
       };
