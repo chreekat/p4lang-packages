@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+#
+# Meta-check that the repo plumbing is self-consistent: scripts parse, the
+# justfile parses, and cross-references (justfile -> scripts, workflows ->
+# recipes, workflow syntax) resolve. Catches renames that orphan a caller.
+#
+# Usage: smoke
+
+set -Eeuo pipefail
+
+die() { echo "error: $*" >&2; exit 1; }
+
+[[ -f justfile ]] || die "run from the repo root"
+
+status=0
+fail() { echo "FAIL: $*" >&2; status=1; }
+
+echo "shell-parsing scripts..."
+for f in scripts/* scripts/test/*; do
+    [[ -f "$f" ]] && bash -n "$f"
+done
+
+echo "parsing the justfile..."
+just --list >/dev/null
+
+echo "checking justfile -> script references..."
+while read -r s; do
+    [[ -x "$s" ]] || fail "justfile references missing script: $s"
+done < <(grep -oE '\./scripts/[A-Za-z0-9_./-]+' justfile | sort -u)
+
+echo "checking workflow -> recipe references..."
+known=" $(just --summary) "
+while read -r r; do
+    [[ "$known" == *" $r "* ]] || fail "workflow invokes unknown recipe: $r"
+done < <(grep -rhoE --include='*.yml' --include='*.yaml' '\bjust +[a-z][a-z-]*' .github/workflows | awk '{print $2}' | sort -u)
+
+echo "linting workflows..."
+actionlint -color || status=1
+
+(( status == 0 )) && echo "smoke: all checks passed"
+exit "$status"

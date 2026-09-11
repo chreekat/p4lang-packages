@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+#
+# Vendor p4c's CMake FetchContent dependencies as quilt components.
+#
+# Usage: vendor-p4c-deps <srctree> <destdir>
+#
+# <srctree> is a checked-out p4c tag. Each dep is vendored at whatever version
+# p4c declares there: unpacked into <srctree>/<dep>/ for debian/rules to point
+# FETCHCONTENT_SOURCE_DIR_* at, and written to
+# <destdir>/p4lang-p4c_<upstream-version>.orig-<dep>.tar.gz, the name
+# dpkg-source requires of a component tarball. The upstream version comes from
+# p4lang-p4c/changelog.
+#
+# p4c fetches these during its CMake build, which a sandboxed .deb build cannot
+# do. We fetch them ahead of time instead. abseil and protobuf tarballs are
+# verified against p4c's declared SHA256; p4runtime and inja are pinned by
+# commit only, so the commit id in the archive URL is the integrity anchor.
+
+set -Eeuo pipefail
+
+die() { echo "error: $*" >&2; exit 1; }
+
+usage="Usage: vendor-p4c-deps <srctree> <destdir>"
+srctree="${1:?$usage}"
+destdir="${2:?$usage}"
+[[ -f "$srctree/CMakeLists.txt" ]] || die "$srctree is not a p4c source tree"
+
+# The component tarball names carry the package version.
+[[ -f p4lang-p4c/changelog ]] || die "cannot find p4lang-p4c/changelog. Run from the repo root."
+name=p4lang-p4c
+deb_version=$(dpkg-parsechangelog -l p4lang-p4c/changelog -S Version)
+ver="${deb_version%-*}"
+
+# Where p4c declares each dep. FetchContent_Declare only runs when the
+# enclosing CMake code runs, so these are scattered rather than central.
+abseil_cmake="cmake/Abseil.cmake"
+protobuf_cmake="cmake/Protobuf.cmake"
+p4runtime_cmake="CMakeLists.txt"
+inja_cmake="backends/p4tools/modules/testgen/CMakeLists.txt"
+
+#
+# Reading p4c's declarations
+#
+
+# The value of <field> inside p4c's FetchContent_Declare block for <dep>.
+declared_field() {
+    local file="$1" dep="$2" field="$3"
+    awk -v dep="$dep" -v field="$field" '
+        tolower($1) ~ /^fetchcontent_declare\(?$/ { inblock = 1; named = 0; next }
+        inblock && $1 == ")"                      { inblock = 0; named = 0; next }
+        inblock && !named                         { named = ($1 == dep); next }
+        inblock && named && $1 == field           { sub(/^SHA256=/, "", $2); print $2; exit }
+    ' "$srctree/$file"
+}
+
+# The value of a plain set(<var> ...) in a p4c CMake file.
+declared_var() {
+    local file="$1" var="$2"
+    sed -nE "s/^[[:space:]]*set\(${var}[[:space:]]+\"?([^\")]+)\"?\).*/\1/p" "$srctree/$file" | head -1
+}
+
+declared() {
+    local what="$1" val="$2"
+    [[ -n "$val" ]] || die "cannot read $what -- p4c's CMake layout changed"
+    echo "$val"
+}
+
+abseil_version=$(declared "abseil version ($abseil_cmake)" "$(declared_var "$abseil_cmake" P4C_ABSEIL_VERSION)")
+abseil_sha=$(declared "abseil sha256 ($abseil_cmake)" "$(declared_field "$abseil_cmake" abseil URL_HASH)")
+protobuf_version=$(declared "protobuf version ($protobuf_cmake)" "$(declared_var "$protobuf_cmake" P4C_PROTOBUF_VERSION)")
+protobuf_sha=$(declared "protobuf sha256 ($protobuf_cmake)" "$(declared_field "$protobuf_cmake" protobuf URL_HASH)")
+p4runtime_commit=$(declared "p4runtime commit ($p4runtime_cmake)" "$(declared_field "$p4runtime_cmake" p4runtime GIT_TAG)")
+inja_commit=$(declared "inja commit ($inja_cmake)" "$(declared_field "$inja_cmake" inja GIT_TAG)")
+
+#
+# Vendoring
+#
+
+# Fetch a tarball to <out> and unpack it under <dir> as a quilt component,
+# checking <sha> when the dep declares one.
+vendor_tarball() {
+    local dir="$1" out="$2" url="$3" sha="${4:-}"
+    echo "Vendoring $url"
+    curl -fSL "$url" -o "$out"
+    [[ -z "$sha" ]] || echo "$sha  $out" | sha256sum -c -
+    mkdir -p "$dir"
+    tar -xzf "$out" --strip-components=1 -C "$dir"
+}
+
+component() { echo "$destdir/${name}_${ver}.orig-$1.tar.gz"; }
+
+# Abseil is vendored because the system version is too old for protobuf, and
+# Debian's abseil has a separate packaging problem anyway. We need to drop
+# some ancient macro usage
+# (https://salsa.debian.org/debian/abseil/-/merge_requests/5)
+vendor_tarball "$srctree/abseil" "$(component abseil)" \
+    "https://github.com/abseil/abseil-cpp/releases/download/${abseil_version}/abseil-cpp-${abseil_version}.tar.gz" \
+    "$abseil_sha"
+
+# The protobuf on Ubuntu 22.04 is just ancient. Plus it depends on the
+# system abseil, which doesn't work.
+vendor_tarball "$srctree/protobuf" "$(component protobuf)" \
+    "https://github.com/protocolbuffers/protobuf/releases/download/v${protobuf_version}/protobuf-${protobuf_version}.tar.gz" \
+    "$protobuf_sha"
+
+# We haven't packaged p4runtime yet.
+vendor_tarball "$srctree/p4runtime" "$(component p4runtime)" \
+    "https://github.com/p4lang/p4runtime/archive/${p4runtime_commit}.tar.gz"
+
+# The test tools render test templates with inja, which Ubuntu doesn't ship.
+vendor_tarball "$srctree/inja" "$(component inja)" \
+    "https://github.com/pantor/inja/archive/${inja_commit}.tar.gz"

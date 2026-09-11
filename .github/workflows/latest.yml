@@ -1,0 +1,85 @@
+name: Generate latest release
+
+on:
+  repository_dispatch:
+    types: [upstream-tag]
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package to release (pi, bmv2, p4c)'
+        required: true
+      tag:
+        description: 'Upstream tag to release (e.g. v0.1.3 or 1.15.4)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Take (package, tag) from the dispatch payload or the manual inputs.
+      # Passed through env, never interpolated into the shell, to avoid
+      # injection from a repository_dispatch payload.
+      - name: Resolve package and tag
+        id: input
+        env:
+          EVENT: ${{ github.event_name }}
+          DISPATCH_PACKAGE: ${{ github.event.client_payload.package }}
+          DISPATCH_TAG: ${{ github.event.client_payload.tag }}
+          INPUT_PACKAGE: ${{ github.event.inputs.package }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          if [ "$EVENT" = "repository_dispatch" ]; then
+            echo "package=$DISPATCH_PACKAGE" >> "$GITHUB_OUTPUT"
+            echo "tag=$DISPATCH_TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "package=$INPUT_PACKAGE" >> "$GITHUB_OUTPUT"
+            echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y osc devscripts dpkg-dev git
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      # osc reads credentials from OSC_* env vars, but only once a config
+      # file exists. (An empty one is a parse error, hence the [general] stub.)
+      - name: Configure osc and git identity
+        run: |
+          mkdir -p ~/.config/osc
+          printf '[general]\n' > ~/.config/osc/oscrc
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Release ${{ steps.input.outputs.package }} @ ${{ steps.input.outputs.tag }}
+        env:
+          # The changelog trailer identity, matching Maintainer in the control file.
+          DEBFULLNAME: P4lang Authors
+          DEBEMAIL: p4-dev@p4.org
+          OSC_APIURL: https://api.opensuse.org
+          OSC_USERNAME: ${{ secrets.OBS_USERNAME }}
+          OSC_PASSWORD: ${{ secrets.OBS_PASSWORD }}
+          PACKAGE: ${{ steps.input.outputs.package }}
+          TAG: ${{ steps.input.outputs.tag }}
+        run: |
+          just changelog-upstream-add "$PACKAGE" "$TAG"
+          just upload-src-pkg "$PACKAGE"
+
+      # The changelog is the version's source of truth, so record what was
+      # uploaded. Committed only after a successful upload: a failed run
+      # leaves no changelog entry, so a re-dispatch starts clean.
+      - name: Commit the changelog
+        env:
+          PACKAGE: ${{ steps.input.outputs.package }}
+          TAG: ${{ steps.input.outputs.tag }}
+        run: |
+          git add "p4lang-$PACKAGE/changelog"
+          git commit -m "Release $PACKAGE $TAG to the latest channel"
+          git push

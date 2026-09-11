@@ -1,0 +1,222 @@
+#!/usr/bin/env bash
+
+# Build a Debian source package locally with `osc build` inside a privileged
+# Ubuntu Docker container.
+
+#   --clean    OBS-faithful clean build: networked, no ccache, no local debs.
+#   --dry-run  prints the docker invocation instead of running it.
+#
+
+# Build environment:
+#
+# Uses vm-type=(kvm|qemu) depending on target arch.
+#
+# LOCALBUILD_VM_TYPE overrides the chosen vm-type.
+#
+# NB 1: On NixOS and possibly other hosts, vm-type=chroot is broken, so builds
+# are usually very slow. (util-linux/getopt installs too late for some postinst
+# scripts). You can try it out, though, by setting LOCALBUILD_VM_TYPE=chroot.
+#
+# NB 2: For vm-type=qemu, the host system needs to register any foreign arch
+# with binfmt's F flag, and needs to use a static qemu. On NixOS these can be
+# done with boot.binfmt.preferStaticEmulators = true.
+
+set -euo pipefail
+die() { echo "error: $*" >&2; exit 1; }
+
+dry_run=0
+clean=0
+while [[ "${1:-}" == --* ]]; do
+    case "$1" in
+        --dry-run) dry_run=1; shift ;;
+        --clean)   clean=1; shift ;;
+        *) die "unknown option: $1" ;;
+    esac
+done
+
+srcdir="${1:?Usage: build-package [--dry-run] [--clean] <srcdir> [repo] [arch]}"
+repo="${2:-xUbuntu_22.04}"
+arch="${3:-x86_64}"
+
+[[ -d "$srcdir" ]] || die "no such dir: $srcdir"
+srcdir_abs="$(cd "$srcdir" && pwd)"
+shopt -s nullglob; dscs=( "$srcdir"/*.dsc ); shopt -u nullglob
+(( ${#dscs[@]} > 0 )) || die "no .dsc in $srcdir"
+dsc="$(basename "${dscs[0]}")"
+
+# osc caches _buildinfo-/_buildconfig- files in its cwd, and --noinit/--offline
+# read them back, so the workdir must persist across runs.
+#
+# We persist per package, since the filenames are keyed by repo-arch only, and
+# would otherwise overwrite each other.
+workdir_host="$PWD/build/.osc-work/$(basename "$srcdir_abs")"
+mkdir -p "$workdir_host"
+
+# osc's --noinit/--offline path insists the cwd is an .osc package working
+# copy (it reads store.build_repositories unconditionally, even with
+# --local-package). Give it the bare minimum files to run without actually
+# creating a full .osc copy.
+mkdir -p "$workdir_host/.osc"
+printf 'home:p4lang\n' > "$workdir_host/.osc/_project"
+printf '%s\n' "${dsc%%_*}" > "$workdir_host/.osc/_package"
+
+# The .dsc's Build-Depends* fields, continuations included.
+build_deps() {
+    awk '/^Build-Depends/ { f=1; print; next }
+         /^[[:space:]]/   { if (f) print; next }
+                          { f=0 }' "$srcdir/$dsc"
+}
+
+# Tier selection: offline needs the cached buildinfo pair plus an init stamp
+# proving a networked build finished for this .dsc's Build-Depends. The stamp
+# hashes only the Build-Depends* fields -- not the whole .dsc -- so
+# regenerating the source package with unchanged deps stays offline.
+buildinfo="$workdir_host/_buildinfo-$repo-$arch.xml"
+buildconfig="$workdir_host/_buildconfig-$repo-$arch"
+stamp="$workdir_host/_initstamp-$repo-$arch"
+deps_hash="$(build_deps | sha256sum | cut -d' ' -f1)"
+offline=0
+if (( clean )); then
+    echo "tier: clean (OBS-faithful; no ccache, no local debs)" >&2
+elif [[ ! -f "$buildinfo" || ! -f "$buildconfig" ]]; then
+    echo "tier: networked init (no cached buildinfo for $repo/$arch)" >&2
+elif [[ ! -f "$stamp" ]]; then
+    echo "tier: networked init (no init stamp; last init didn't finish?)" >&2
+elif [[ "$(cat "$stamp")" != "$deps_hash" ]]; then
+    echo "tier: networked init (Build-Depends changed)" >&2
+else
+    offline=1
+    echo "tier: offline (warm root; rm $stamp to force re-init)" >&2
+fi
+
+# Synthesize the osc.config on tmpfs.
+_cleanup=()
+cleanup() { (( ${#_cleanup[@]} )) && rm -f "${_cleanup[@]}"; }
+trap cleanup EXIT
+oscrc="$(mktemp)"; _cleanup+=("$oscrc")
+chmod 600 "$oscrc"
+apiurl="https://api.opensuse.org"
+user="${OBS_USERNAME:-}"
+if [[ -z "$user" ]]; then
+    if (( offline )); then
+        user=offline  # placeholder
+    else
+        read -rp "OBS username: " user \
+            || die "OBS_USERNAME unset and no TTY to prompt for it"
+    fi
+fi
+cat > "$oscrc" <<EOF
+[general]
+apiurl = $apiurl
+
+[$apiurl]
+user = $user
+credentials_mgr_class = osc.credentials.TransientCredentialsManager
+EOF
+
+run() { if (( dry_run )); then printf '+'; printf ' %q' "$@"; printf '\n'; else "$@"; fi; }
+
+# Reuse the host's OBS session so the dev loop never prompts for a password when
+# it's available.
+cookie_mounts=()
+host_cookiejar="${XDG_STATE_HOME:-$HOME/.local/state}/osc/cookiejar"
+if [[ -f "$host_cookiejar" ]]; then
+    cookie_tmp="$(mktemp)"; cp "$host_cookiejar" "$cookie_tmp"; _cleanup+=("$cookie_tmp")
+    cookie_mounts+=(--mount "type=bind,source=$cookie_tmp,target=/root/.local/state/osc/cookiejar")
+fi
+
+# Bootstrap the build image once (osc + KVM + qemu, per install-osc-build-deps.sh).
+if ! docker image inspect obs-build-image &>/dev/null; then
+    echo "obs-build-image not found, bootstrapping..." >&2
+    docker rm -f obs-build-bootstrap &>/dev/null || true
+    run docker run --privileged --name obs-build-bootstrap \
+        --mount "type=bind,source=$PWD,target=/repo" --workdir /repo \
+        ubuntu:latest ./scripts/install-osc-build-deps.sh
+    run docker commit obs-build-bootstrap obs-build-image
+    run docker rm obs-build-bootstrap
+fi
+
+# The offline tier skips the test suite because it takes *forever*.
+#
+# All other tiers still build with tests.
+#
+# Mechanism: build-recipe-dsc turns a %deb_build_options macro in the build
+# config into DEB_BUILD_OPTIONS. When set to nocheck, dh skips dh_auto_test. So
+# we set that macro in the cache.
+#
+# The cache is root-owned (osc writes it from inside the container), so the
+# append runs in the container too.
+if (( offline )); then
+    run docker run --rm \
+        --mount "type=bind,source=$workdir_host,target=/work" \
+        obs-build-image sh -c \
+        "grep -q '^%deb_build_options nocheck\$' /work/_buildconfig-$repo-$arch \
+            || printf 'Macros:\n%%deb_build_options nocheck\n' >> /work/_buildconfig-$repo-$arch"
+    echo "tests skipped (but can be enabled with --clean)" >&2
+fi
+
+# vm-type: a native arch uses KVM for a clean build; a foreign arch chroots under
+# qemu (host binfmt). LOCALBUILD_VM_TYPE overrides (e.g. =chroot for a no-VM loop).
+if [[ "$arch" == "$(uname -m)" ]]; then vm_type="${LOCALBUILD_VM_TYPE:-kvm}"
+else vm_type="${LOCALBUILD_VM_TYPE:-chroot}"; fi
+vm_args=(--vm-type "$vm_type")
+# Linking p4c takes a lot of space.
+case "$vm_type" in kvm|qemu)
+    vm_args+=(--vm-memory 20000 --vm-disk-size 40960) ;;
+esac
+
+# p4c's large translation units (e.g. frontend.cpp) under LTO can each need
+# several GB. At the host's full core count they exhaust the VM's RAM and the
+# OOM killer takes cc1plus.
+jobs_args=(--jobs "${LOCALBUILD_JOBS:-8}")
+
+# Keep KVM (disk image) and chroot (directory tree) build roots in separate dirs
+# so switching vm-types doesn't clobber either, and each stays warm for the
+# offline tier.
+mkdir -p build/.osc-cache
+if [[ "$vm_type" == chroot ]]; then buildroot_host="$PWD/build/.osc-buildroot-chroot"
+else buildroot_host="$PWD/build/.osc-buildroot"; fi
+mkdir -p "$buildroot_host"
+
+# Dev-loop osc args + the local .deb dir mount; --clean drops them for an
+# OBS-faithful build.
+fast_args=()
+fast_mounts=()
+if (( ! clean )); then
+    mkdir -p build/debs
+    fast_args+=(--ccache --prefer-pkgs /debs --keep-pkgs /debs)
+    fast_mounts+=(--mount "type=bind,source=$PWD/build/debs,target=/debs")
+    (( offline )) && fast_args+=(--noinit --offline)
+fi
+
+# Allocate a TTY only when we have one. osc's Transient password prompt needs it,
+# but a non-interactive run (env creds, CI) must not pass -t or docker errors.
+tty_args=()
+[[ -t 0 ]] && tty_args=(-it)
+
+status=0
+run docker run --rm "${tty_args[@]}" --privileged \
+    --mount "type=bind,source=$srcdir_abs,target=/pkg,readonly" \
+    --mount "type=bind,source=$workdir_host,target=/work" \
+    --mount "type=bind,source=$oscrc,target=/tmp/osc.config,readonly" \
+    --mount "type=bind,source=$PWD/build/.osc-cache,target=/var/tmp/osbuild-packagecache" \
+    --mount "type=bind,source=$buildroot_host,target=/var/tmp/build-root-root" \
+    "${cookie_mounts[@]}" \
+    "${fast_mounts[@]}" \
+    --workdir /work \
+    obs-build-image \
+    osc --config /tmp/osc.config build --trust-all-projects "${vm_args[@]}" "${jobs_args[@]}" "${fast_args[@]}" \
+        --alternative-project home:p4lang --local-package \
+        "$repo" "$arch" "/pkg/$dsc" \
+    || status=$?
+
+if (( ! dry_run )); then
+    if (( status == 0 && ! offline )); then
+        # Only a finished networked build certifies the warm root.
+        printf '%s\n' "$deps_hash" > "$stamp"
+    elif (( status != 0 && offline )); then
+        echo "offline build failed; if the cached state looks stale:" >&2
+        echo "  rm $stamp   # forces a networked re-init" >&2
+    fi
+fi
+exit "$status"

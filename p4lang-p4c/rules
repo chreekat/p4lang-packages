@@ -16,16 +16,19 @@ upstreampck := $(source)_$(version).orig.tar.gz
 	dh $@ --with python3
 
 clean:
-	@ echo CLEAN
-	rm -f ../$(upstreampck)
-	tar czf ../$(upstreampck) --exclude=./debian --exclude=.pc .
 	dh_testdir
-	dh_auto_clean
+	dh_auto_clean || true
 	dh_clean
 
 override_dh_auto_configure:
 	dh_auto_configure --builddirectory=build/ -- \
 		-DFETCHCONTENT_FULLY_DISCONNECTED=ON \
+		-DFETCHCONTENT_SOURCE_DIR_PROTOBUF=$(CURDIR)/protobuf \
+		-DFETCHCONTENT_SOURCE_DIR_ABSEIL=$(CURDIR)/abseil \
+		-DFETCHCONTENT_SOURCE_DIR_P4RUNTIME=$(CURDIR)/p4runtime \
+		-DFETCHCONTENT_SOURCE_DIR_INJA=$(CURDIR)/inja \
+		-DP4C_USE_PREINSTALLED_BDWGC=ON \
+		-DUSE_PREINSTALLED_Z3=ON \
 		-DCMAKE_BUILD_TYPE=Release \
 		-DCMAKE_INSTALL_PREFIX=/usr \
 		-DENABLE_BMV2=ON \

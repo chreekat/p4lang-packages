@@ -1,1 +1,2 @@
-0001-Check-for-libgctba-before-using.patch
+0001-link-only-installed-bdwgc-components.patch
+0002-lower-preinstalled-z3-floor.patch

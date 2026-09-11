@@ -1,7 +1,7 @@
 Source: p4lang-bmv2
 Section: net
 Priority: optional
-Maintainer: Radostin Stoyanov <radostin@stoyanov.io>
+Maintainer: P4lang Authors <p4-dev@p4.org>
 Build-Depends:
     automake,
     build-essential,
@@ -20,6 +20,7 @@ Build-Depends:
     libgmp-dev,
     libgrpc++-dev,
     libgrpc-dev,
+    libjsoncpp-dev,
     libopenmpi-dev,
     libnanomsg-dev,
     libpcap-dev,
@@ -29,6 +30,7 @@ Build-Depends:
     libthrift | libthrift-0.11.0 | libthrift-0.13.0 | libthrift-0.16.0 | libthrift-0.17.0,
     libthrift-dev,
     libtool,
+    libxxhash-dev,
     pkg-config,
     protobuf-compiler,
     protobuf-compiler-grpc,

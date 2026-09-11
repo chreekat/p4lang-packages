@@ -1,3 +1,10 @@
+p4lang-p4c (1.2.5.15-2) unstable; urgency=medium
+
+  * Depend on what p4c runs, not what built it. Installing the compiler pulled
+    314 packages where 41 suffice.
+
+ -- Bryan Richter <b@chreekat.net>  Fri, 21 Aug 2026 19:38:44 +0300
+
 p4lang-p4c (1.2.4.8-1) bullseye; urgency=medium
 
   * Update release to version 1.2.4.8

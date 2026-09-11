@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+#
+# Upload a source package directory to an OBS project/package.
+#
+# Usage: osc-upload <project> <package> <srcdir>
+#
+# The srcdir must contain exactly one .dsc; it and the files it references
+# are what get uploaded. Credentials come from osc's normal config.
+
+set -euo pipefail
+die() { echo "error: $*" >&2; exit 1; }
+
+usage="Usage: osc-upload <project> <package> <srcdir>"
+project="${1:?$usage}"
+package="${2:?$usage}"
+srcdir="${3:?$usage}"
+
+[[ -d "$srcdir" ]] || die "no such dir: $srcdir"
+shopt -s nullglob; dscs=( "$srcdir"/*.dsc ); shopt -u nullglob
+(( ${#dscs[@]} == 1 )) || die "expected exactly one .dsc in $srcdir, found ${#dscs[@]}"
+dsc="${dscs[0]}"
+
+workdir=$(mktemp -d)
+trap 'rm -rf "$workdir"' EXIT
+
+echo "Checking out ${project}/${package}..."
+(cd "$workdir" && osc checkout "$project" "$package")
+pkg_dir="$workdir/$project/$package"
+[[ -d "$pkg_dir" ]] || die "checkout failed: $pkg_dir does not exist"
+
+# Replace the old source files (keeping _meta and other OBS internals) with
+# the .dsc and everything it references.
+find "$pkg_dir" -maxdepth 1 -type f ! -name '_*' -delete
+dcmd cp "$dsc" "$pkg_dir/"
+
+(
+    cd "$pkg_dir"
+    osc addremove
+    osc commit -m "$(basename "$dsc" .dsc)"
+)
+
+echo "Done. Uploaded to ${project}/${package}."

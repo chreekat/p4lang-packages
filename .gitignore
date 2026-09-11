@@ -6,6 +6,9 @@ pi/
 # Build directory used in build.sh
 build/
 
+# osc working checkouts (osc checkout home:<project>)
+home:*/
+
 # Debian files
 **/*.debian.tar.xz
 **/*.orig.tar.gz

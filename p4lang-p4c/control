@@ -1,7 +1,7 @@
 Source: p4lang-p4c
 Section: devel
 Priority: optional
-Maintainer: Radostin Stoyanov <radostin@stoyanov.io>
+Maintainer: P4lang Authors <p4-dev@p4.org>
 Build-Depends:
     debhelper (>= 12),
     dh-python,
@@ -18,6 +18,7 @@ Build-Depends:
     libgc-dev,
     libgmp-dev,
     libbpf-dev,
+    libz3-dev,
     pkg-config,
     tcpdump,
     libelf-dev,
@@ -55,38 +56,11 @@ Depends:
     ${shlibs:Depends},
     ${misc:Depends},
     ${python3:Depends},
-    cpp,
-    libboost-dev,
-    libboost-all-dev,
-    libboost-graph-dev,
-    libboost-iostreams-dev,
-    libfl-dev,
-    libgc-dev,
-    libgmp-dev,
-    libbpf-dev,
-    pkg-config,
-    tcpdump,
-    libelf-dev,
-    llvm,
+    gcc
+Suggests:
     clang,
-    iproute2,
-    net-tools,
-    python3-grpcio,
-    python3-pyroute2,
-    python3-ply,
-    python3-scapy,
-    python3-setuptools,
-    python3-thrift,
-    python3-protobuf,
-    libprotobuf-dev,
-    libprotoc-dev,
-    protobuf-compiler,
-    libgrpc-dev,
-    libgrpc++-dev,
-    protobuf-compiler-grpc,
-    libthrift | libthrift-0.11.0 | libthrift-0.13.0 | libthrift-0.16.0 | libthrift-0.17.0,
-    libthrift-dev,
-    thrift-compiler,
-    p4lang-bmv2
+    libbpf-dev,
+    libelf-dev,
+    llvm
 Description: P4 language compiler
  A reference compiler for the P4 programming language.

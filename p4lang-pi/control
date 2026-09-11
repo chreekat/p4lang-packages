@@ -1,7 +1,7 @@
 Source: p4lang-pi
 Section: net
 Priority: optional
-Maintainer: Radostin Stoyanov <radostin@stoyanov.io>
+Maintainer: P4lang Authors <p4-dev@p4.org>
 Build-Depends:
     autoconf,
     automake,

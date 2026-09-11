@@ -4,74 +4,23 @@
 
 # P4 Packages
 
-This repository contains all files necessary to build packages for Ubuntu and Debian.
+This repo has tooling and metadata for building OS-specific binary packages for
+the P4 ecosystem: [PI](https://github.com/p4lang/PI), [BMv2](https://github.com/p4lang/behavioral-model), and [p4c](https://github.com/p4lang/p4c).
 
-To build all debian packages run inside Ubuntu 20.04 container using Docker run the
-following script:
+Currently the targets are a few Debian-based distributions, with plans to
+support more.
 
-```bash
-./build.sh
-```
+Packages are availale on the [Open Build Service](https://build.opensuse.org/project/show/home:p4lang),
+which builds the binaries and hosts the apt repositories.
 
-## Build dependencies
+Each `p4lang-*/` directory holds one package's `debian/` files. The upstream
+source is fetched at packaging time, at the version named by the package's
+changelog.
 
-Note that `build.sh` requires [Podman](https://podman.io/getting-started/installation.html) or [Docker](https://docs.docker.com/engine/install/) to be pre-installed.
+## Tooling
 
-# Ubuntu/Debian
-
-Building a package for Ubuntu or Debian requires a number of files to be added in a subdirectory directory, called `debian`, in the source tree. These files can be used to build two types of packages: binary packages and source packages.
-
-Binary packages contain executables, configuration files, man pages, copyright information, and other documentation. They can be installed on Ubuntu/Debian system with `dpkg` or `apt-get`.
-
-In contrast, source packages contain the original unmodified source code in gzip-compressed tar format, a file describing the source package, and usually a file that contains changes to the original source. Source packages are used by automated build systems such as [Launchpad](https://launchpad.net/) and [Open Build Service](https://openbuildservice.org/).
-
-## Building packages
-
-The following commands can be used to build a Debian/Ubuntu package manually.
-
-### Binary package
-
-This command creates a `.deb` file.
-```bash
-dpkg-buildpackage -us -uc
-```
-
-### Source package
-
-This command creates a source package for a new version of the source code file (`.orig.tar.gz`).
-```bash
-debuild -sa
-```
-
-### Source package update
-
-This command creates an update for source package with an existing source code file (`.orig.tar.gz`).
-```bash
-debuild -sd
-```
-
-## Files under the `debian` directory
-
-### `control`
-
-This file contains [control information](https://www.debian.org/doc/debian-policy/ch-controlfields.html) used by package management tools.
-
-### `rules`
-
-This is an executable Makefile that is used to create the package. Like any other Makefile, it consists of several rules, each of which defines a target and how it is carried out.
-
-### `changelog`
-
-This file contains a brief explanation of changes and updates to the package.
-
-### `copyright`
-
-This file contains information about the copyright and license of the upstream sources.
-
-### `compat`
-
-This file specifies the [compatibility level](https://manpages.debian.org/bullseye/debhelper/debhelper.7.en.html#COMPATIBILITY_LEVELS) for the [debhelper](https://packages.debian.org/search?keywords=debhelper) tool.
-
-### `source/format`
-
-This file contains the version number for the format of the source package.
+Everything is driven by [`just`](https://just.systems); `just --list` shows
+recipes for cutting changelog entries, generating and uploading the source
+packages, and building them locally in an OBS-faithful VM — with a cached
+offline fast path — to develop and inspect a package without waiting on OBS.
+The development environment comes from the Nix flake (`nix develop`).
