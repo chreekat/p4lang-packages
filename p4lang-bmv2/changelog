@@ -1,3 +1,9 @@
+p4lang-bmv2 (1.15.6-1) unstable; urgency=medium
+
+  * Upstream release
+
+ -- Bryan Richter <b@chreekat.net>  Fri, 11 Sep 2026 16:24:17 +0300
+
 p4lang-bmv2 (1.15.0-9) jammy; urgency=medium
 
   * Changed distro to 'unstable' for dput
