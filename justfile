@@ -6,10 +6,11 @@ changelog-add package:
     DEBEMAIL="$(git config user.name) <$(git config user.email)>" \
         dch --changelog p4lang-{{package}}/changelog
 
-# Add a new upstream release to the changelog.
-changelog-upstream-add package version:
+# Start a changelog entry for new upstream <tag> at Debian revision 1.
+changelog-upstream-add package tag:
     DEBEMAIL="$(git config user.name) <$(git config user.email)>" \
-        dch --changelog p4lang-{{package}}/changelog --newversion {{version}} \
+        dch --changelog p4lang-{{package}}/changelog \
+        --newversion {{trim_start_match(tag, "v")}}-1 \
         Upstream release
 
 # Generate build/<package> source package at upstream <tag>
