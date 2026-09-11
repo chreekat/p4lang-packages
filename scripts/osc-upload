@@ -36,7 +36,7 @@ dcmd cp "$dsc" "$pkg_dir/"
 (
     cd "$pkg_dir"
     osc addremove
-    osc commit -m "Update from latest-source-package"
+    osc commit -m "$(basename "$dsc" .dsc)"
 )
 
 echo "Done. Uploaded to ${project}/${package}."
