@@ -14,16 +14,16 @@ changelog-upstream-add package tag:
         --distribution unstable \
         Upstream release
 
-# Generate build/<package> source package at upstream <tag>
-generate-src-pkg package tag:
-    ./scripts/generate-src-pkg {{package}} {{tag}}
+# Generate build/<package> source package at the version in its changelog.
+generate-src-pkg package:
+    ./scripts/generate-src-pkg {{package}}
 
 # Build .dsc locally via osc-in-Docker: [--clean|--dry-run] <srcdir> [repo] [arch]
 build-pkg +args:
     ./scripts/build-pkg {{args}}
 
-# Build <package> at upstream <tag> and upload it to the latest channel's OBS project.
-upload-src-pkg package tag: (generate-src-pkg package tag)
+# Build <package> at its changelog version and upload it to the latest channel's OBS project.
+upload-src-pkg package: (generate-src-pkg package)
     ./scripts/upload-src-pkg {{obs_project}} p4lang-{{package}} build/{{package}}
 
 # Drop the cached build image so the next build-pkg re-provisions it.
